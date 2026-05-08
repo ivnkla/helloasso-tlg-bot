@@ -5,7 +5,7 @@ import logging
 import os
 import re
 
-import httpx
+from curl_cffi.requests import AsyncSession
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -16,56 +16,29 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-HELLOASSO_AUTH_URL = "https://api.helloasso.com/oauth2/token"
-HELLOASSO_API_URL = "https://api.helloasso.com/v5"
+HELLOASSO_BASE_URL = "https://www.helloasso.com"
 URL_PATTERN = re.compile(r"helloasso\.com/associations/([^/\s]+)/evenements/([^/?\s]+)")
 
-
-async def _get_access_token(client_id: str, client_secret: str) -> str:
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            HELLOASSO_AUTH_URL,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": client_id,
-                "client_secret": client_secret,
-            },
-        )
-        response.raise_for_status()
-        return response.json()["access_token"]
+# Extrait chaque tier : capture remainingNumber et label dans le bloc JS embarqué
+TIER_PATTERN = re.compile(r"\{remainingNumber:(\d+),[^}]*?label:\"([^\"]+)\"")
 
 
 async def fetch_remaining_spots(org_slug: str, event_slug: str) -> str:
-    client_id = os.getenv("HELLOASSO_CLIENT_ID")
-    client_secret = os.getenv("HELLOASSO_CLIENT_SECRET")
+    url = f"{HELLOASSO_BASE_URL}/associations/{org_slug}/evenements/{event_slug}"
 
-    if not client_id or not client_secret:
-        return (
-            "Credentials HelloAsso non configurés.\n"
-            "Renseigne HELLOASSO_CLIENT_ID et HELLOASSO_CLIENT_SECRET dans le .env"
-        )
-
-    token = await _get_access_token(client_id, client_secret)
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{HELLOASSO_API_URL}/organizations/{org_slug}/forms/Event/{event_slug}/items",
-            headers={"Authorization": f"Bearer {token}"},
-        )
+    async with AsyncSession() as session:
+        response = await session.get(url, impersonate="firefox", timeout=15)
         response.raise_for_status()
-        items = response.json().get("data", [])
+        html = response.text
 
-    if not items:
-        return "Aucun billet trouvé pour cet événement."
+    tiers = TIER_PATTERN.findall(html)
+
+    if not tiers:
+        return "Impossible de récupérer les places (données introuvables dans la page)."
 
     lines = []
-    for item in items:
-        name = item.get("name", "Billet")
-        remaining = item.get("remainingEntries")
-        if remaining is None:
-            lines.append(f"• {name} : données non disponibles")
-        else:
-            lines.append(f"• {name} : {remaining} place(s) restante(s)")
+    for remaining, label in tiers:
+        lines.append(f"• {label} : {remaining} place(s) restante(s)")
 
     return "\n".join(lines)
 
@@ -93,12 +66,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         result = await fetch_remaining_spots(org_slug, event_slug)
-    except httpx.HTTPStatusError as e:
-        result = f"Erreur API HelloAsso : {e.response.status_code}."
-        logger.error("HTTPStatusError : %s", e)
-    except Exception:
-        result = "Une erreur inattendue s'est produite."
-        logger.exception("Erreur inattendue dans fetch_remaining_spots")
+    except Exception as e:
+        if hasattr(e, "response") and e.response is not None:
+            result = f"Erreur HTTP {e.response.status_code} lors de la récupération de la page."
+        else:
+            result = "Une erreur inattendue s'est produite."
+        logger.error("Erreur dans fetch_remaining_spots : %s", e)
 
     await update.message.reply_text(result)
 
