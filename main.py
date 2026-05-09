@@ -32,7 +32,7 @@ URL_PATTERN = re.compile(r"helloasso\.com/associations/([^/\s]+)/evenements/([^/
 TIER_PATTERN = re.compile(r"\{remainingNumber:(\d+),[^}]*?label:\"([^\"]+)\"")
 SALE_END_PATTERN = re.compile(r'saleEndDate:"([^"]+)"')
 
-SUBSCRIPTIONS_FILE = Path("subscriptions.json")
+SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_PATH", "subscriptions.json"))
 POLL_INTERVAL = 300  # 5 minutes
 
 WAITING_FOR_URL = 1
