@@ -90,6 +90,8 @@ def _format_tiers(tiers: dict[str, int]) -> str:
 # ---------------------------------------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None:
+        return
     await update.message.reply_text(
         "Commandes disponibles :\n\n"
         "• Envoie un lien HelloAsso → consultation ponctuelle\n"
@@ -101,6 +103,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None:
+        return
     text = update.message.text or ""
     match = URL_PATTERN.search(text)
 
@@ -118,7 +122,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         html = await _fetch_html(org_slug, event_slug)
         result = _format_tiers(_parse_tiers(html))
     except Exception as e:
-        result = f"Erreur HTTP {e.response.status_code}." if hasattr(e, "response") and e.response else "Erreur inattendue."
+        http_response = getattr(e, "response", None)
+        result = f"Erreur HTTP {http_response.status_code}." if http_response else "Erreur inattendue."
         logger.error("Erreur fetch ponctuel : %s", e)
 
     await update.message.reply_text(result)
@@ -129,11 +134,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # ---------------------------------------------------------------------------
 
 async def subscribe_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.message is None:
+        return ConversationHandler.END
     await update.message.reply_text("Envoie le lien HelloAsso de l'événement à suivre :")
     return WAITING_FOR_URL
 
 
 async def subscribe_receive_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.message is None:
+        return ConversationHandler.END
     text = update.message.text or ""
     match = URL_PATTERN.search(text)
 
@@ -145,6 +154,8 @@ async def subscribe_receive_url(update: Update, context: ContextTypes.DEFAULT_TY
 
     org_slug, event_slug = match.group(1), match.group(2)
     event_key = f"{org_slug}/{event_slug}"
+    if update.effective_chat is None:
+        return ConversationHandler.END
     chat_id = str(update.effective_chat.id)
 
     await update.message.reply_text("Vérification de l'événement…")
@@ -179,11 +190,17 @@ async def subscribe_receive_url(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def subscribe_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.message is None:
+        return ConversationHandler.END
     await update.message.reply_text("Abonnement annulé.")
     return ConversationHandler.END
 
 
 async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None:
+        return
+    if update.effective_chat is None:
+        return
     chat_id = str(update.effective_chat.id)
     subs = load_subscriptions()
     user_subs = subs.get(chat_id, {})
@@ -206,13 +223,17 @@ async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def unsubscribe_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
+    if query is None:
+        return
     await query.answer()
 
-    data = query.data.removeprefix("unsub:")
+    data = (query.data or "").removeprefix("unsub:")
     if data == "__cancel__":
         await query.edit_message_text("Annulé.")
         return
 
+    if update.effective_chat is None:
+        return
     chat_id = str(update.effective_chat.id)
     subs = load_subscriptions()
 
@@ -286,6 +307,8 @@ async def poll_subscriptions(context: ContextTypes.DEFAULT_TYPE) -> None:
 def main() -> None:
     load_dotenv()
     token = os.getenv("TOKEN")
+    if not token:
+        raise ValueError("La variable d'environnement TOKEN est manquante.")
 
     application = Application.builder().token(token).build()
 
@@ -303,6 +326,8 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(unsubscribe_callback, pattern=r"^unsub:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    if application.job_queue is None:
+        raise RuntimeError("Job queue non disponible — installe le paquet 'python-telegram-bot[job-queue]'.")
     application.job_queue.run_repeating(poll_subscriptions, interval=POLL_INTERVAL, first=10)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
