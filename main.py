@@ -338,7 +338,7 @@ def main() -> None:
         fallbacks=[CommandHandler("cancel", subscribe_cancel)],
     )
 
-    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler(["start", "help"], start))
     application.add_handler(subscribe_conv)
     application.add_handler(CommandHandler("list", list_subscriptions))
     application.add_handler(CommandHandler("unsubscribe", unsubscribe))
