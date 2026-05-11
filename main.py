@@ -96,6 +96,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Commandes disponibles :\n\n"
         "• Envoie un lien HelloAsso → consultation ponctuelle\n"
         "• /subscribe → s'abonner aux mises à jour d'un événement\n"
+        "• /list → voir ses abonnements actifs\n"
         "• /unsubscribe → gérer ses abonnements\n\n"
         "Exemple de lien :\n"
         "https://www.helloasso.com/associations/mon-asso/evenements/mon-evenement"
@@ -194,6 +195,23 @@ async def subscribe_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return ConversationHandler.END
     await update.message.reply_text("Abonnement annulé.")
     return ConversationHandler.END
+
+
+async def list_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None:
+        return
+    if update.effective_chat is None:
+        return
+    chat_id = str(update.effective_chat.id)
+    subs = load_subscriptions()
+    user_subs = subs.get(chat_id, {})
+
+    if not user_subs:
+        await update.message.reply_text("Tu n'as aucun abonnement actif.")
+        return
+
+    lines = [f"• {HELLOASSO_BASE_URL}/associations/{key}" for key in user_subs]
+    await update.message.reply_text("Tes abonnements actifs :\n" + "\n".join(lines))
 
 
 async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -322,6 +340,7 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(subscribe_conv)
+    application.add_handler(CommandHandler("list", list_subscriptions))
     application.add_handler(CommandHandler("unsubscribe", unsubscribe))
     application.add_handler(CallbackQueryHandler(unsubscribe_callback, pattern=r"^unsub:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

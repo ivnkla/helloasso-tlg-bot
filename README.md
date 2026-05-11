@@ -9,7 +9,8 @@ Le bot est disponible sur Telegram : [@hello_asso_alert_bot](https://t.me/hello_
 
 1. Envoie un lien HelloAsso - le bot répond avec les places restantes par tarif
 2. `/subscribe` - active les notifications automatiques à chaque changement (vérification toutes les 5 min)
-3. `/unsubscribe` - désactive les notifications pour ce lien
+3. `/list` - affiche la liste des événements suivis
+4. `/unsubscribe` - désactive les notifications pour ce lien
 
 Le bot se désabonne automatiquement quand l'événement est complet ou que la billetterie est fermée.
 
