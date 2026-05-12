@@ -95,12 +95,46 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Commandes disponibles :\n\n"
         "• Envoie un lien HelloAsso → consultation ponctuelle\n"
+        "• /check <lien> → consulter les places d'un événement\n"
         "• /subscribe → s'abonner aux mises à jour d'un événement\n"
         "• /list → voir ses abonnements actifs\n"
         "• /unsubscribe → gérer ses abonnements\n\n"
         "Exemple de lien :\n"
         "https://www.helloasso.com/associations/mon-asso/evenements/mon-evenement"
     )
+
+
+async def check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None:
+        return
+    args = context.args or []
+    if not args:
+        await update.message.reply_text(
+            "Usage : /check <lien HelloAsso>\n"
+            "Exemple : /check https://www.helloasso.com/associations/mon-asso/evenements/mon-evenement"
+        )
+        return
+
+    match = URL_PATTERN.search(args[0])
+    if not match:
+        await update.message.reply_text(
+            "Lien HelloAsso non reconnu.\n"
+            "Format attendu : helloasso.com/associations/{asso}/evenements/{evenement}"
+        )
+        return
+
+    org_slug, event_slug = match.group(1), match.group(2)
+    await update.message.reply_text("Recherche en cours…")
+
+    try:
+        html = await _fetch_html(org_slug, event_slug)
+        result = _format_tiers(_parse_tiers(html))
+    except Exception as e:
+        http_response = getattr(e, "response", None)
+        result = f"Erreur HTTP {http_response.status_code}." if http_response else "Erreur inattendue."
+        logger.error("Erreur fetch /check : %s", e)
+
+    await update.message.reply_text(result)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -339,6 +373,7 @@ def main() -> None:
     )
 
     application.add_handler(CommandHandler(["start", "help"], start))
+    application.add_handler(CommandHandler("check", check))
     application.add_handler(subscribe_conv)
     application.add_handler(CommandHandler("list", list_subscriptions))
     application.add_handler(CommandHandler("unsubscribe", unsubscribe))
