@@ -94,11 +94,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     await update.message.reply_text(
         "Commandes disponibles :\n\n"
-        "• Envoie un lien HelloAsso → consultation ponctuelle\n"
         "• /check <lien> → consulter les places d'un événement\n"
         "• /subscribe → s'abonner aux mises à jour d'un événement\n"
         "• /list → voir ses abonnements actifs\n"
-        "• /unsubscribe → gérer ses abonnements\n\n"
+        "• /unsubscribe → gérer ses abonnements\n"
+        "• /help → afficher l'aide\n\n"
         "Exemple de lien :\n"
         "https://www.helloasso.com/associations/mon-asso/evenements/mon-evenement"
     )
